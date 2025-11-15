@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Quran - Muhammad Ayub (Offline Ready)</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body{
+      font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;
+      background:linear-gradient(135deg,#1e3c72,#2a5298);
+      color:#fff; min-height:100vh; padding:20px;
+    }
+    .container{
+      max-width:1000px; margin:0 auto;
+      background:rgba(255,255,255,0.1); border-radius:16px;
+      padding:24px; backdrop-filter:blur(10px);
+      box-shadow:0 8px 32px rgba(0,0,0,0.3);
+    }
+    header{text-align:center; margin-bottom:30px;}
+    h1{font-size:2.2rem; margin-bottom:8px; text-shadow:0 2px 4px rgba(0,0,0,0.4);}
+    .info{font-size:1.1rem; opacity:0.9; margin:10px 0;}
+    .search-box,.select-box{margin:15px 0; text-align:center;}
+    .search-box input,.select-box select{
+      padding:12px 16px; width:300px; max-width:100%;
+      border:none; border-radius:50px; font-size:1rem;
+      outline:none; box-shadow:0 4px 12px rgba(0,0,0,0.2);
+      background:white; color:#333;
+    }
+    table{
+      width:100%; border-collapse:collapse; margin-top:20px;
+      background:rgba(255,255,255,0.05); border-radius:12px; overflow:hidden;
+    }
+    th{background:rgba(0,0,0,0.3); padding:16px; text-align:center; font-weight:600;}
+    td{padding:14px; text-align:center; border-bottom:1px solid rgba(255,255,255,0.1);}
+    tr:hover{background:rgba(255,255,255,0.1);}
+    .surah-name{font-weight:600; font-size:1.1rem;}
+    .ayah-count{font-size:0.9rem; opacity:0.8;}
+    .play-btn,.download-btn{
+      padding:8px 12px; margin:0 4px; border:none; border-radius:8px;
+      cursor:pointer; font-size:0.9rem; transition:0.3s;
+    }
+    .play-btn{background:#4CAF50; color:white;}
+    .play-btn:hover{background:#45a049;}
+    .download-btn{background:#2196F3; color:white; position:relative;}
+    .download-btn:hover{background:#1e88e5;}
+    .download-btn.loading{background:#666; cursor:not-allowed;}
+    .download-btn .progress{
+      position:absolute; top:0; left:0; height:100%; background:rgba(255,255,255,0.3);
+      width:0%; border-radius:8px; transition:width .1s;
+    }
+    .audio-player{width:100%; margin-top:8px; display:none;}
+    footer{text-align:center; margin-top:40px; font-size:0.9rem; opacity:0.7;}
+
+    @media(max-width:768px){
+      h1{font-size:1.8rem;}
+      .search-box input,.select-box select{width:100%;}
+      table,thead,tbody,th,td,tr{display:block;}
+      thead tr{position:absolute; top:-9999px; left:-9999px;}
+      tr{margin:16px 0; border:1px solid rgba(255,255,255,0.2); border-radius:12px;}
+      td{border:none; position:relative; padding-left:50%; text-align:right;}
+      td:before{
+        position:absolute; left:16px; width:45%; padding-right:10px;
+        white-space:nowrap; font-weight:600;
+      }
+      td:nth-of-type(1):before{content:"#";}
+      td:nth-of-type(2):before{content:"Surah";}
+      td:nth-of-type(3):before{content:"Ayahs";}
+      td:nth-of-type(4):before{content:"Place";}
+      td:nth-of-type(5):before{content:"Actions";}
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>القرآن الكريم</h1>
+      <div class="info">
+        <strong>Reciter:</strong> <span id="currentReciter">Shaykh Muhammad Ayub (محمد أيوب)</span><br>
+        <strong>Translation:</strong> Mikaal Waters — Saheeh International (English)<br>
+        <strong>Riwayah:</strong> Hafs 'an 'Asim | <strong>Style:</strong> Murattal
+      </div>
+    </header>
+
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Search Surah (e.g. Fatiha, Yasin, Kahf...)">
+    </div>
+
+    <div class="select-box">
+      <select id="reciterSelect">
+        <option value="" disabled>Select Reciter</option>
+        <option value="muhammad_ayyub" selected>Muhammad Ayub (Default)</option>
+        <option value="abdulbaset_with_naeem_sultan_pickthall">Abdulbasit</option>
+        <option value="abdullaah_basfar">Abdullah Basfar</option>
+      </select>
+    </div>
+
+    <table id="quranTable">
+      <thead>
+        <tr>
+          <th>#</th><th>Surah</th><th>Ayahs</th><th>Place</th><th>Listen & Download</th>
+        </tr>
+      </thead>
+      <tbody id="surahList"></tbody>
+    </table>
+
+    <footer>
+      All audio from <a href="https://quranicaudio.com" target="_blank" style="color:#add8ff">Quranicaudio.com</a> |
+      No copyright infringement intended
+    </footer>
+  </div>
+
+  <script>
+    // ---------- Reciter handling ----------
+    let currentReciter = 'muhammad_ayyub';
+    const reciterMap = {
+      'muhammad_ayyub':'Shaykh Muhammad Ayub (محمد أيوب)',
+      'abdulbaset_with_naeem_sultan_pickthall':'Abdulbasit',
+      'abdullaah_basfar':'Abdullah Basfar'
+    };
+
+    // ---------- Full Surah data ----------
+    const surahs = [
+      {no:1, name:"Al-Fatiha", ar:"الفاتحة", en:"The Opening", ayahs:7, place:"Mecca"},
+      {no:2, name:"Al-Baqara", ar:"البقرة", en:"The Cow", ayahs:286, place:"Medina"},
+      {no:3, name:"Al 'Imran", ar:"آل عمران", en:"The Family of Imran", ayahs:200, place:"Medina"},
+      {no:4, name:"An-Nisa", ar:"النساء", en:"The Women", ayahs:176, place:"Medina"},
+      {no:5, name:"Al-Ma'ida", ar:"المائدة", en:"The Table Spread", ayahs:120, place:"Medina"},
+      {no:6, name:"Al-An'am", ar:"الأنعام", en:"The Cattle", ayahs:165, place:"Mecca"},
+      {no:7, name:"Al-A'raf", ar:"الأعراف", en:"The Heights", ayahs:206, place:"Mecca"},
+      {no:8, name:"Al-Anfal", ar:"الأنفال", en:"The Spoils of War", ayahs:75, place:"Medina"},
+      {no:9, name:"At-Tawba", ar:"التوبة", en:"The Repentance", ayahs:129, place:"Medina"},
+      {no:10, name:"Yunus", ar:"يونس", en:"Jonah", ayahs:109, place:"Mecca"},
+      {no:11, name:"Hud", ar:"هود", en:"Hud", ayahs:123, place:"Mecca"},
+      {no:12, name:"Yusuf", ar:"يوسف", en:"Joseph", ayahs:111, place:"Mecca"},
+      {no:13, name:"Ar-Ra'd", ar:"الرعد", en:"The Thunder", ayahs:43, place:"Medina"},
+      {no:14, name:"Ibrahim", ar:"إبراهيم", en:"Abraham", ayahs:52, place:"Mecca"},
+      {no:15, name:"Al-Hijr", ar:"الحجر", en:"The Rocky Tract", ayahs:99, place:"Mecca"},
+      {no:16, name:"An-Nahl", ar:"النحل", en:"The Bee", ayahs:128, place:"Mecca"},
+      {no:17, name:"Al-Isra", ar:"الإسراء", en:"The Night Journey", ayahs:111, place:"Mecca"},
+      {no:18, name:"Al-Kahf", ar:"الكهف", en:"place",place:"Mecca"},
+      {no:19, name:"Maryam", ar:"مريم", en:"Mary", ayahs:98, place:"Mecca"},
+      {no:20, name:"Ta-Ha", ar:"طه", en:"Ta-Ha", ayahs:135, place:"Mecca"},
+      {no:21, name:"Al-Anbiya", ar:"الأنبياء", en:"The Prophets", ayahs:112, place:"Mecca"},
+      {no:22, name:"Al-Hajj", ar:"الحج", en:"The Pilgrimage", ayahs:78, place:"Medina"},
+      {no:23, name:"Al-Mu'minun", ar:"المؤمنون", en:"The Believers", ayahs:118, place:"Mecca"},
+      {no:24, name:"An-Nur", ar:"النور", en:"The Light", ayahs:64, place:"Medina"},
+      {no:25, name:"Al-Furqan", ar:"الفرقان", en:"The Criterion", ayahs:77, place:"Mecca"},
+      {no:26, name:"Ash-Shu'ara", ar:"الشعراء", en:"The Poets", ayahs:227, place:"Mecca"},
+      {no:27, name:"An-Naml", ar:"النمل", en:"The Ant", ayahs:93, place:"Mecca"},
+      {no:28, name:"Al-Qasas", ar:"القصص", en:"The Stories", ayahs:88, place:"Mecca"},
+      {no:29, name:"Al-'Ankabut", ar:"العنكبوت", en:"The Spider", ayahs:69, place:"Mecca"},
+      {no:30, name:"Ar-Rum", ar:"الروم", en:"The Romans", ayahs:60, place:"Mecca"},
+      {no:31, name:"Luqman", ar:"لقمان", en:"Luqman", ayahs:34, place:"Mecca"},
+      {no:32, name:"As-Sajda", ar:"السجدة", en:"The Prostration", ayahs:30, place:"Mecca"},
+      {no:33, name:"Al-Ahzab", ar:"الأحزاب", en:"The Confederates", ayahs:73, place:"Medina"},
+      {no:34, name:"Saba", ar:"سبأ", en:"Sheba", ayahs:54, place:"Mecca"},
+      {no:35, name:"Fatir", ar:"فاطر", en:"The Originator", ayahs:45, place:"Mecca"},
+      {no:36, name:"Ya-Sin", ar:"يس", en:"Ya-Sin", ayahs:83, place:"Mecca"},
+      {no:37, name:"As-Saffat", ar:"الصافات", en:"Those Ranged in Ranks", ayahs:182, place:"Mecca"},
+      {no:38, name:"Sad", ar:"ص", en:"Sad", ayahs:88, place:"Mecca"},
+      {no:39, name:"Az-Zumar", ar:"الزمر", en:"The Groups", ayahs:75, place:"Mecca"},
+      {no:40, name:"Ghafir", ar:"غافر", en:"The Forgiver", ayahs:85, place:"Mecca"},
+      {no:41, name:"Fussilat", ar:"فصلت", en:"Explained in Detail", ayahs:54, place:"Mecca"},
+      {no:42, name:"Ash-Shura", ar:"الشورى", en:"The Consultation", ayahs:53, place:"Mecca"},
+      {no:43, name:"Az-Zukhruf", ar:"الزخرف", en:"The Ornaments of Gold", ayahs:89, place:"Mecca"},
+      {no:44, name:"Ad-Dukhan", ar:"الدخان", en:"The Smoke", ayahs:59, place:"Mecca"},
+      {no:45, name:"Al-Jathiya", ar:"الجاثية", en:"The Kneeling", ayahs:37, place:"Mecca"},
+      {no:46, name:"Al-Ahqaf", ar:"الأحقاف", en:"The Sand Dunes", ayahs:35, place:"Mecca"},
+      {no:47, name:"Muhammad", ar:"محمد", en:"Muhammad", ayahs:38, place:"Medina"},
+      {no:48, name:"Al-Fath", ar:"الفتح", en:"The Victory", ayahs:29, place:"Medina"},
+      {no:49, name:"Al-Hujurat", ar:"الحجرات", en:"The Private Apartments", ayahs:18, place:"Medina"},
+      {no:50, name:"Qaf", ar:"ق", en:"Qaf", ayahs:45, place:"Mecca"},
+      {no:51, name:"Adh-Dhariyat", ar:"الذاريات", en:"The Winnowing Winds", ayahs:60, place:"-Mecca"},
+      {no:52, name:"At-Tur", ar:"الطور", en:"The Mount", ayahs:49, place:"Mecca"},
+      {no:53, name:"An-Najm", ar:"النجم", en:"The Star", ayahs:62, place:"Mecca"},
+      {no:54, name:"Al-Qamar", ar:"القمر", en:"The Moon", ayahs:55, place:"Mecca"},
+      {no:55, name:"Ar-Rahman", ar:"الرحمن", en:"The Most Gracious", ayahs:78, place:"Medina"},
+      {no:56, name:"Al-Waqi'a", ar:"الواقعة", en:"The Inevitable", ayahs:96, place:"Mecca"},
+      {no:57, name:"Al-Hadid", ar:"الحديد", en:"The Iron", ayahs:29, place:"Medina"},
+      {no:58, name:"Al-Mujadila", ar:"المجادلة", en:"The Pleading Woman", ayahs:22, place:"Medina"},
+      {no:59, name:"Al-Hashr", ar:"الحشر", en:"The Gathering", ayahs:24, place:"Medina"},
+      {no:60, name:"Al-Mumtahana", ar:"الممتحنة", en:"The Examined One", ayahs:13, place:"Medina"},
+      {no:61, name:"As-Saff", ar:"الصف", en:"The Ranks", ayahs:14, place:"Medina"},
+      {no:62, name:"Al-Jumu'a", ar:"الجمعة", en:"Friday", ayahs:11, place:"Medina"},
+      {no:63, name:"Al-Munafiqun", ar:"المنافقون", en:"The Hypocrites", ayahs:11, place:"Medina"},
+      {no:64, name:"At-Taghabun", ar:"التغابن", en:"Mutual Disillusion", ayahs:18, place:"Medina"},
+      {no:65, name:"At-Talaq", ar:"الطلاق", en:"Divorce", ayahs:12, place:"Medina"},
+      {no:66, name:"At-Tahrim", ar:"التحريم", en:"The Prohibition", ayahs:12, place:"Medina"},
+      {no:67, name:"Al-Mulk", ar:"الملك", en:"The Sovereignty", ayahs:30, place:"Mecca"},
+      {no:68, name:"Al-Qalam", ar:"القلم", en:"The Pen", ayahs:52, place:"Mecca"},
+      {no:69, name:"Al-Haqqah", ar:"الحاقة", en:"The Inevitable", ayahs:52, place:"Mecca"},
+      {no:70, name:"Al-Ma'arij", ar:"المعارج", en:"The Ascending Stairways", ayahs:44, place:"Mecca"},
+      {no:71, name:"Nuh", ar:"نوح", en:"Noah", ayahs:28, place:"Mecca"},
+      {no:72, name:"Al-Jinn", ar:"الجن", en:"The Jinn", ayahs:28, place:"Mecca"},
+      {no:73, name:"Al-Muzzammil", ar:"المزمل", en:"The Enshrouded One", ayahs:20, place:"Mecca"},
+      {no:74, name:"Al-Muddaththir", ar:"المدثر", en:"The Cloaked One", ayahs:56, place:"Mecca"},
+      {no:75, name:"Al-Qiyama", ar:"القيامة", en:"The Resurrection", ayahs:40, place:"Mecca"},
+      {no:76, name:"Al-Insan", ar:"الإنسان", en:"Man", ayahs:31, place:"Medina"},
+      {no:77, name:"Al-Mursalat", ar:"المرسلات", en:"The Emissaries", ayahs:50, place:"Mecca"},
+      {no:78, name:"An-Naba", ar:"النبأ", en:"The Tidings", ayahs:40, place:"Mecca"},
+      {no:79, name:"An-Nazi'at", ar:"النازعات", en:"Those Who Drag Forth", ayahs:46, place:"Mecca"},
+      {no:80, name:"Abasa", ar:"عبس", en:"He Frowned", ayahs:42, place:"Mecca"},
+      {no:81, name:"At-Takwir", ar:"التكوير", en:"The Overthrowing", ayahs:29, place:"Mecca"},
+      {no:82, name:"Al-Infitar", ar:"الإنفطار", en:"The Cleaving", ayahs:19, place:"Mecca"},
+      {no:83, name:"Al-Mutaffifin", ar:"المطففين", en:"The Defrauders", ayahs:36, place:"Mecca"},
+      {no:84, name:"Al-Inshiqaq", ar:"الإنشقاق", en:"The Sundering", ayahs:25, place:"Mecca"},
+      {no:85, name:"Al-Buruj", ar:"البروج", en:"The Mansions of the Stars", ayahs:22, place:"Mecca"},
+      {no:86, name:"At-Tariq", ar:"الطارق", en:"The Morning Star", ayahs:17, place:"Mecca"},
+      {no:87, name:"Al-A'la", ar:"الأعلى", en:"The Most High", ayahs:19, place:"Mecca"},
+      {no:88, name:"Al-Ghashiya", ar:"الغاشية", en:"The Overwhelming", ayahs:26, place:"Mecca"},
+      {no:89, name:"Al-Fajr", ar:"الفجر", en:"The Dawn", ayahs:30, place:"Mecca"},
+      {no:90, name:"Al-Balad", ar:"البلد", en:"The City", ayahs:20, place:"Mecca"},
+      {no:91, name:"Ash-Shams", ar:"الشمس", en:"The Sun", ayahs:15, place:"Mecca"},
+      {no:92, name:"Al-Layl", ar:"الليل", en:"The Night", ayahs:21, place:"Mecca"},
+      {no:93, name:"Ad-Duha", ar:"الضحى", en:"The Morning Hours", ayahs:11, place:"Mecca"},
+      {no:94, name:"Ash-Sharh", ar:"الشرح", en:"The Relief", ayahs:8, place:"Mecca"},
+      {no:95, name:"At-Tin", ar:"التين", en:"The Fig", ayahs:8, place:"Mecca"},
+      {no:96, name:"Al-'Alaq", ar:"العلق", en:"The Clot", ayahs:19, place:"Mecca"},
+      {no:97, name:"Al-Qadr", ar:"القدر", en:"The Power", ayahs:5, place:"Mecca"},
+      {no:98, name:"Al-Bayyina", ar:"البينة", en:"The Clear Proof", ayahs:8, place:"Medina"},
+      {no:99, name:"Az-Zalzala", ar:"الزلزلة", en:"The Earthquake", ayahs:8, place:"Medina"},
+      {no:100, name:"Al-'Adiyat", ar:"العاديات", en:"The Courser", ayahs:11, place:"Mecca"},
+      {no:101, name:"Al-Qari'a", ar:"القارعة", en:"The Calamity", ayahs:11, place:"Mecca"},
+      {no:102, name:"At-Takathur", ar:"التكاثر", en:"The Rivalry", ayahs:8, place:"Mecca"},
+      {no:103, name:"Al-'Asr", ar:"العصر", en:"The Declining Day", ayahs:3, place:"Mecca"},
+      {no:104, name:"Al-Humaza", ar:"الهمزة", en:"The Traducer", ayahs:9, place:"Mecca"},
+      {no:105, name:"Al-Fil", ar:"الفيل", en:"The Elephant", ayahs:5, place:"Mecca"},
+      {no:106, name:"Quraysh", ar:"قريش", en:"Quraysh", ayahs:4, place:"Mecca"},
+      {no:107, name:"Al-Ma'un", ar:"الماعون", en:"The Small Kindnesses", ayahs:7, place:"Mecca"},
+      {no:108, name:"Al-Kawthar", ar:"الكوثر", en:"The Abundance", ayahs:3, place:"Mecca"},
+      {no:109, name:"Al-Kafirun", ar:"الكافرون", en:"The Disbelievers", ayahs:6, place:"Mecca"},
+      {no:110, name:"An-Nasr", ar:"النصر", en:"The Divine Support", ayahs:3, place:"Medina"},
+      {no:111, name:"Al-Masad", ar:"المسد", en:"The Palm Fiber", ayahs:5, place:"Mecca"},
+      {no:112, name:"Al-Ikhlas", ar:"الإخلاص", en:"The Sincerity", ayahs:4, place:"Mecca"},
+      {no:113, name:"Al-Falaq", ar:"الفلق", en:"The Daybreak", ayahs:5, place:"Mecca"},
+      {no:114, name:"An-Nas", ar:"الناس", en:"Mankind", ayahs:6, place:"Mecca"}
+    ];
+
+    // ---------- DOM ----------
+    const surahList = document.getElementById('surahList');
+    const searchInput = document.getElementById('searchInput');
+    const reciterSelect = document.getElementById('reciterSelect');
+    const currentReciterSpan = document.getElementById('currentReciter');
+
+    // ---------- Helpers ----------
+    function getAudioUrl(no){
+      const pad = no.toString().padStart(3,'0');
+      return `https://download.quranicaudio.com/quran/${currentReciter}/${pad}.mp3`;
+    }
+
+    // ---------- Render ----------
+    function renderSurahs(data){
+      surahList.innerHTML = '';
+      data.forEach(s=>{
+        const pad = s.no.toString().padStart(3,'0');
+        const url = getAudioUrl(s.no);
+        const safe = s.name.replace(/[^a-zA-Z0-9]/g,'_');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${s.no}</td>
+          <td><div class="surah-name">${s.name}</div><small style="opacity:0.7;">${s.ar}</small></td>
+          <td><span class="ayah-count">${s.ayahs} ayahs</span></td>
+          <td>${s.place}</td>
+          <td>
+            <button class="play-btn" onclick="togglePlay('${url}',this)">Play</button>
+            <button class="download-btn" onclick="downloadOffline('${url}','${pad}_${safe}.mp3',this)">
+              Download <div class="progress"></div>
+            </button>
+            <audio class="audio-player" controls></audio>
+          </td>`;
+        surahList.appendChild(tr);
+      });
+    }
+
+    // ---------- Play ----------
+    function togglePlay(url, btn){
+      const audio = btn.parentElement.querySelector('.audio-player');
+      if(audio.src!==url){
+        audio.src = url; audio.style.display='block';
+        audio.play().catch(()=>{});
+        btn.textContent='Pause';
+      }else if(audio.paused){
+        audio.play().catch(()=>{});
+        btn.textContent='Pause';
+      }else{
+        audio.pause(); btn.textContent='Play';
+      }
+    }
+
+    // ---------- Offline Download ----------
+    async function downloadOffline(url, filename, button){
+      const prog = button.querySelector('.progress');
+      button.classList.add('loading'); button.disabled=true;
+      button.textContent='0%';
+
+      try{
+        const resp = await fetch(url);
+        if(!resp.ok) throw new Error('Network error');
+
+        const total = resp.headers.get('content-length');
+        let loaded = 0;
+        const chunks = [];
+        const reader = resp.body.getReader();
+
+        while(true){
+          const {done, value} = await reader.read();
+          if(done) break;
+          chunks.push(value);
+          loaded += value.length;
+          if(total){
+            const pct = Math.round(loaded/parseInt(total,10)*100);
+            prog.style.width = pct+'%';
+            button.textContent = pct+'%';
+          }
+        }
+
+        const blob = new Blob(chunks,{type:'audio/mpeg'});
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl; a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+
+        button.textContent='Saved';
+        prog.style.width='100%';
+        setTimeout(()=>{ button.classList.remove('loading'); button.disabled=false;
+                         button.textContent='Download'; prog.style.width='0%'; },1500);
+      }catch(e){
+        alert('Download failed: '+e.message);
+        button.classList.remove('loading'); button.disabled=false;
+        button.textContent='Download'; prog.style.width='0%';
+      }
+    }
+
+    // ---------- Search ----------
+    searchInput.addEventListener('input',()=>{
+      const q = searchInput.value.trim().toLowerCase();
+      const filtered = surahs.filter(s=>
+        s.name.toLowerCase().includes(q)||
+        s.ar.includes(q)||
+        s.en.toLowerCase().includes(q)||
+        s.no.toString().includes(q)
+      );
+      renderSurahs(filtered);
+    });
+
+    // ---------- Reciter change ----------
+    reciterSelect.addEventListener('change',function(){
+      currentReciter = this.value;
+      currentReciterSpan.textContent = reciterMap[currentReciter]||'Unknown';
+      renderSurahs(surahs);
+    });
+
+    // ---------- Init ----------
+    renderSurahs(surahs);
+  </script>
+</body>
+</html>
